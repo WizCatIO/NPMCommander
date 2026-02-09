@@ -32,7 +32,8 @@ const elements = {
     urlText: document.getElementById('urlText'),
     copyUrlBtn: document.getElementById('copyUrlBtn'),
     openUrlBtn: document.getElementById('openUrlBtn'),
-    dropOverlay: document.getElementById('dropOverlay')
+    dropOverlay: document.getElementById('dropOverlay'),
+    copyConsoleBtn: document.getElementById('copyConsoleBtn')
 };
 
 // Initialize
@@ -77,6 +78,25 @@ function setupEventListeners() {
         elements.console.innerHTML = '';
         elements.urlBar.style.display = 'none';
         detectedUrl = null;
+    });
+
+    // Copy Console
+    elements.copyConsoleBtn.addEventListener('click', () => {
+        const text = elements.console.innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            const originalHTML = elements.copyConsoleBtn.innerHTML;
+            elements.copyConsoleBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            `;
+            elements.copyConsoleBtn.classList.add('btn-success');
+
+            setTimeout(() => {
+                elements.copyConsoleBtn.innerHTML = originalHTML;
+                elements.copyConsoleBtn.classList.remove('btn-success');
+            }, 1000);
+        });
     });
 
     // Open URL

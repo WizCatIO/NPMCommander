@@ -7,12 +7,14 @@
         "start": "electron .",
         "build": "electron-builder --mac"
     },
+    "author": "Eleada",
     "build": {
         "appId": "com.twisted.npmcommander",
         "productName": "NPM Commander",
         "mac": {
             "category": "public.app-category.developer-tools",
-            "icon": "assets/npm-logo.icns",
+            "icon": "assets/NPMCommander.icns",
+            "identity": null,
             "target": [
                 "dir"
             ]

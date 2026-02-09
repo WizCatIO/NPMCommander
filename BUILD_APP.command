@@ -17,14 +17,22 @@ fi
 echo "🔨 Building macOS app..."
 npm run build
 
-if [ -d "dist/mac/NPM Commander.app" ]; then
+if [ -d "dist/mac/NPM Commander.app" ] || [ -d "dist/mac-arm64/NPM Commander.app" ]; then
   echo ""
   echo "✅ Build successful!"
   echo ""
-  echo "📂 App location: dist/mac/NPM Commander.app"
-  echo ""
-  echo "Opening Finder..."
-  open "dist/mac"
+  
+  if [ -d "dist/mac-arm64/NPM Commander.app" ]; then
+    echo "📂 App location: dist/mac-arm64/NPM Commander.app"
+    echo ""
+    echo "Opening Finder..."
+    open "dist/mac-arm64"
+  else
+    echo "📂 App location: dist/mac/NPM Commander.app"
+    echo ""
+    echo "Opening Finder..."
+    open "dist/mac"
+  fi
 else
   echo ""
   echo "❌ Build failed. Check the output above for errors."
