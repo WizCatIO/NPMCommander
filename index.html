@@ -4,42 +4,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
     <title>NPM Commander</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 
-<body style="background-color: #0d0d0d; color: #ffffff;">
-    <!-- Drag Region for macOS Title Bar -->
-    <div class="titlebar">
-        <div class="drag-region"></div>
+<body>
+    <div class="titlebar-spacer" data-tauri-drag-region></div>
+
+    <!-- Tabs Bar -->
+    <div class="tabs-bar" id="tabsBar" data-tauri-drag-region>
+        <div class="tabs-container" id="tabsContainer">
+            <!-- Tabs injected here -->
+        </div>
+        <button class="add-tab-btn" id="addTabBtn" title="New Tab">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+        </button>
     </div>
 
     <div class="app-container">
         <!-- Header -->
-        <header class="header">
-            <div class="header-left">
-                <img src="../assets/npm-logo.svg" alt="NPM" class="npm-logo">
-                <div class="project-info">
-                    <h1 id="projectName">Select a Project</h1>
-                    <span class="project-path" id="projectPath">No project loaded</span>
+        <header class="header" data-tauri-drag-region>
+            <div class="header-left" data-tauri-drag-region>
+                <img src="/assets/npm-logo.svg" alt="NPM" class="npm-logo" data-tauri-drag-region>
+                <div class="project-info" data-tauri-drag-region>
+                    <h1 id="projectName" data-tauri-drag-region>Select a Project</h1>
+                    <span class="project-path" id="projectPath" data-tauri-drag-region>No project loaded</span>
                 </div>
             </div>
             <div class="header-right">
-                <button class="btn btn-secondary" id="openFinderBtn" title="Open in Finder">
+                <button class="btn btn-secondary hidden" id="openFinderBtn" title="Reveal in Finder">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M5 12H19"></path>
-                        <path d="M12 5l7 7-7 7"></path>
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        <circle cx="12" cy="13" r="3"></circle>
+                        <line x1="12" y1="13" x2="16" y2="17"></line>
                     </svg>
-                    Open in Finder
+                    Reveal in Finder
                 </button>
                 <button class="btn btn-secondary" id="selectFolderBtn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
                     </svg>
-                    Change Project
+                    <span id="selectFolderBtnText">Open Project</span>
                 </button>
+                <button class="btn btn-secondary hidden" id="clearProjectBtn" title="Clear Project">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12"></path>
+                    </svg>
+                    Clear Project
+                </button>
+
             </div>
         </header>
 
@@ -76,12 +93,11 @@
                 <div class="console-header">
                     <h2>Console</h2>
                     <div class="console-actions">
-                        <button class="btn btn-icon" id="copyConsoleBtn" title="Copy Console Output">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2">
-                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                            </svg>
+                        <button class="btn btn-secondary btn-sm" id="copyErrorsBtn" title="Copy Errors & Warnings">
+                            Copy Errors
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="copyAllBtn" title="Copy Entire Console">
+                            Copy All
                         </button>
                         <button class="btn btn-icon" id="clearConsoleBtn" title="Clear Console">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -92,9 +108,18 @@
                     </div>
                 </div>
                 <div class="console" id="console">
-                    <div class="console-welcome">
-                        <p>Welcome to <strong>NPM Commander</strong></p>
-                        <p class="hint">Select a project folder or drag one here to get started.</p>
+                    <div class="console-welcome" id="dropZone">
+                        <div class="drop-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.5">
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z">
+                                </path>
+                                <path d="M12 11v6"></path>
+                                <path d="M9 14l3 3 3-3"></path>
+                            </svg>
+                        </div>
+                        <h3>DROP FOLDER HERE</h3>
+                        <p class="hint">or select a project to get started</p>
                     </div>
                 </div>
             </div>
@@ -124,8 +149,19 @@
         </div>
 
         <!-- Scripts Bar -->
-        <div class="scripts-bar" id="scriptsBar">
-            <div class="no-scripts">Load a project to see available scripts</div>
+        <div class="scripts-footer">
+            <div class="scripts-bar" id="scriptsBar">
+                <div class="no-scripts">Load a project to see available scripts</div>
+            </div>
+
+            <button class="btn btn-danger hidden" id="killAllPortsBtn"
+                title="Kill processes on ports 3000-3010, 5173, 8000, 8080">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+                    <line x1="12" y1="2" x2="12" y2="12"></line>
+                </svg>
+                Kill All Ports
+            </button>
         </div>
     </div>
 
@@ -141,7 +177,15 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- Context Menu -->
+    <div id="contextMenu" class="context-menu hidden">
+        <div class="menu-item" id="ctxCopyAll">Copy All Output</div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" id="ctxCopyErrors">Copy Errors Only</div>
+        <div class="menu-item" id="ctxCopyWarnings">Copy Warnings Only</div>
+    </div>
+
+    <script type="module" src="app.js"></script>
 </body>
 
 </html>

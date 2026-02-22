@@ -3,37 +3,61 @@ cd "$(dirname "$0")"
 
 echo ""
 echo "========================================="
-echo "  NPM Commander - macOS App Builder"
+echo "  NPM Commander (Tauri) - macOS Builder"
 echo "========================================="
 echo ""
 
+# Exit on any error
+set -e
+
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then
-  echo "📦 Installing dependencies..."
+  echo "📦 Installing npm dependencies..."
   npm install
   echo ""
 fi
 
-echo "🔨 Building macOS app..."
+# Check if Rust is installed
+if ! command -v cargo &> /dev/null; then
+  echo "❌ Rust is not installed. Please install it from https://rustup.rs"
+  exit 1
+fi
+
+echo "🧹 Cleaning up previous DMG artifacts..."
+rm -rf src-tauri/target/release/bundle/dmg || true
+
+echo "🔨 Building macOS app with Tauri..."
+# Ensure we have a clean frontend build
 npm run build
 
-if [ -d "dist/mac/NPM Commander.app" ] || [ -d "dist/mac-arm64/NPM Commander.app" ]; then
+echo "🚀 Packaging application..."
+npm run tauri build
+
+# Check for the built app
+APP_PATH="src-tauri/target/release/bundle/macos/NPM Commander.app"
+if [ -d "$APP_PATH" ]; then
   echo ""
-  echo "✅ Build successful!"
+  echo "========================================="
+  echo "✅ BUILD SUCCESSFUL!"
+  echo "========================================="
   echo ""
+  echo "📂 App location: $APP_PATH"
   
-  if [ -d "dist/mac-arm64/NPM Commander.app" ]; then
-    echo "📂 App location: dist/mac-arm64/NPM Commander.app"
-    echo ""
-    echo "Opening Finder..."
-    open "dist/mac-arm64"
+  DMG_PATH=$(find src-tauri/target/release/bundle/dmg -name "*.dmg" | head -n 1)
+  if [ -f "$DMG_PATH" ]; then
+    echo "📦 Installer: $DMG_PATH"
   else
-    echo "📂 App location: dist/mac/NPM Commander.app"
-    echo ""
-    echo "Opening Finder..."
-    open "dist/mac"
+    echo "⚠️  Note: DMG installer was not generated, but the .app is ready."
   fi
+  
+  echo ""
+  echo "💡 Note: The folder is large because of build artifacts in src-tauri/target."
+  echo "   You can run 'cargo clean' inside src-tauri if you want to recover space."
+  echo ""
+  echo "Opening Finder..."
+  open "src-tauri/target/release/bundle/macos"
 else
   echo ""
-  echo "❌ Build failed. Check the output above for errors."
+  echo "❌ Build failed. Please review the errors above."
+  exit 1
 fi

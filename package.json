@@ -1,36 +1,22 @@
 {
     "name": "npm-commander",
-    "version": "1.0.0",
-    "description": "Universal NPM Project Runner for macOS",
-    "main": "main.js",
+    "version": "2.0.0",
+    "private": true,
+    "type": "module",
     "scripts": {
-        "start": "electron .",
-        "build": "electron-builder --mac"
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "tauri": "tauri"
     },
-    "author": "Eleada",
-    "build": {
-        "appId": "com.twisted.npmcommander",
-        "productName": "NPM Commander",
-        "mac": {
-            "category": "public.app-category.developer-tools",
-            "icon": "assets/NPMCommander.icns",
-            "identity": null,
-            "target": [
-                "dir"
-            ]
-        },
-        "files": [
-            "main.js",
-            "preload.js",
-            "renderer/**/*",
-            "assets/**/*"
-        ],
-        "directories": {
-            "output": "dist"
-        }
+    "dependencies": {
+        "@tauri-apps/api": "^2.0.0",
+        "@tauri-apps/plugin-dialog": "^2.6.0",
+        "@tauri-apps/plugin-opener": "^2.5.3",
+        "@tauri-apps/plugin-shell": "^2.3.5"
     },
     "devDependencies": {
-        "electron": "^28.0.0",
-        "electron-builder": "^24.9.1"
+        "@tauri-apps/cli": "^2.0.0",
+        "vite": "^5.0.0"
     }
 }
