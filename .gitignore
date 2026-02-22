@@ -3897,3 +3897,6 @@ src-tauri/target/Icon
 src-tauri/target/CACHEDIR.TAG
 src-tauri/target/.rustc_info.json
 src-tauri/Icon
+/src-tauri/target/release
+/dist
+src-tauri/Icon

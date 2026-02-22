@@ -22,6 +22,12 @@
                 <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
         </button>
+        <div style="flex: 1;" data-tauri-drag-region></div>
+        <button class="add-tab-btn" id="historyBtn" title="Recent Projects">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+        </button>
     </div>
 
     <div class="app-container">
@@ -183,6 +189,14 @@
         <div class="menu-divider"></div>
         <div class="menu-item" id="ctxCopyErrors">Copy Errors Only</div>
         <div class="menu-item" id="ctxCopyWarnings">Copy Warnings Only</div>
+    </div>
+
+    <!-- History Menu -->
+    <div id="historyMenu" class="context-menu hidden" style="width: 250px; right: 10px; left: auto; top: 70px;">
+        <div class="menu-item" style="color: var(--text-muted); pointer-events: none;">Recent Projects (Click to Open)
+        </div>
+        <div class="menu-divider"></div>
+        <div id="historyList"></div>
     </div>
 
     <script type="module" src="app.js"></script>

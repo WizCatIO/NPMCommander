@@ -4,7 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, confirm } from '@tauri-apps/plugin-dialog';
 import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 
 const appWindow = getCurrentWindow();
@@ -13,6 +13,59 @@ let tabs = new Map();
 let activeTabId = null;
 let nextTabId = 1;
 let isInitialStartup = true;
+
+let recentProjects = [];
+const MAX_HISTORY = 10;
+
+function loadHistory() {
+    try {
+        const stored = localStorage.getItem('npm-commander-history');
+        if (stored) {
+            recentProjects = JSON.parse(stored);
+        }
+    } catch (e) { }
+}
+
+function addToHistory(project) {
+    if (!project || !project.projectPath) return;
+    const existingIndex = recentProjects.findIndex(p => p.path === project.projectPath);
+    if (existingIndex !== -1) {
+        recentProjects.splice(existingIndex, 1);
+    }
+    recentProjects.unshift({ name: project.name, path: project.projectPath });
+    if (recentProjects.length > MAX_HISTORY) {
+        recentProjects = recentProjects.slice(0, MAX_HISTORY);
+    }
+    localStorage.setItem('npm-commander-history', JSON.stringify(recentProjects));
+}
+
+function renderHistoryMenu() {
+    elements.historyList.innerHTML = '';
+    if (recentProjects.length === 0) {
+        elements.historyList.innerHTML = '<div class="menu-item" style="color: var(--text-muted); pointer-events: none;">No history yet</div>';
+        return;
+    }
+    recentProjects.forEach(proj => {
+        const item = document.createElement('div');
+        item.className = 'menu-item';
+        let subText = proj.closedAt ? `Last closed: ${new Date(proj.closedAt).toLocaleString()}` : 'Currently Open';
+        item.innerHTML = `<strong>${proj.name}</strong><br><span style="font-size:10px; opacity:0.7;">${subText}</span>`;
+        item.onclick = () => {
+            elements.historyMenu.classList.add('hidden');
+            loadProject(proj.path);
+        };
+        elements.historyList.appendChild(item);
+    });
+}
+
+function updateHistoryOnClose(path) {
+    if (!path) return;
+    const existingIndex = recentProjects.findIndex(p => p.path === path);
+    if (existingIndex !== -1) {
+        recentProjects[existingIndex].closedAt = new Date().toISOString();
+        localStorage.setItem('npm-commander-history', JSON.stringify(recentProjects));
+    }
+}
 
 // Accessors for current tab
 function getTab() { return tabs.get(activeTabId); }
@@ -69,11 +122,15 @@ const elements = {
     ctxCopyWarnings: document.getElementById('ctxCopyWarnings'),
     tabsContainer: document.getElementById('tabsContainer'),
     addTabBtn: document.getElementById('addTabBtn'),
+    historyBtn: document.getElementById('historyBtn'),
+    historyMenu: document.getElementById('historyMenu'),
+    historyList: document.getElementById('historyList'),
     consoleContainer: document.getElementById('console').parentElement // use parent as container
 };
 
 // Initialize
 async function init() {
+    loadHistory();
     setupManualDrag();
     setupEventListeners();
     setupDragDrop();
@@ -197,31 +254,73 @@ function setupEventListeners() {
     });
 
     // Clear Project
+    let clearBtnState = 0;
+    let clearBtnInterval = null;
+    let clearBtnCountdown = 3;
+
+    window.resetClearButton = function () {
+        if (clearBtnInterval) clearInterval(clearBtnInterval);
+        clearBtnState = 0;
+        if (elements.clearProjectBtn) {
+            elements.clearProjectBtn.classList.remove('btn-confirming');
+            elements.clearProjectBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18M6 6l12 12"></path>
+                </svg>
+                Clear Project
+            `;
+        }
+    };
+
     elements.clearProjectBtn.addEventListener('click', async () => {
         const tab = getTab();
         if (!tab) return;
 
-        // Stop any running scripts first
-        for (const script of tab.runningScripts) {
-            await stopScript(script);
+        if (clearBtnState === 0) {
+            clearBtnState = 1;
+            clearBtnCountdown = 3;
+            elements.clearProjectBtn.classList.add('btn-confirming');
+            elements.clearProjectBtn.innerHTML = `Confirm Close (3)`;
+
+            clearBtnInterval = setInterval(() => {
+                clearBtnCountdown--;
+                if (clearBtnCountdown <= 0) {
+                    window.resetClearButton();
+                } else {
+                    elements.clearProjectBtn.innerHTML = `Confirm Close (${clearBtnCountdown})`;
+                }
+            }, 1000);
+            return;
         }
 
-        tab.project = null;
-        tab.el.querySelector('.tab-title').textContent = 'New Project';
-        elements.projectName.textContent = 'Select a Project';
-        elements.projectPath.textContent = 'No project loaded';
-        tab.consoleEl.innerHTML = DROP_ZONE_HTML;
-        elements.scriptsBar.innerHTML = '<div class="no-scripts">Load a project to see available scripts</div>';
-        elements.depsList.innerHTML = '';
-        elements.devDepsList.innerHTML = '';
-        elements.depsStatus.className = 'deps-status';
-        elements.depsStatus.innerHTML = '<span class="status-dot"></span><span>Not loaded</span>';
-        elements.clearProjectBtn.classList.add('hidden');
-        elements.openFinderBtn.classList.add('hidden');
-        if (elements.killPortBtn) elements.killPortBtn.classList.add('hidden');
-        elements.selectFolderBtnText.textContent = 'Open Project';
-        tab.detectedUrl = null;
-        updateScriptButtons();
+        if (clearBtnState === 1) {
+            window.resetClearButton();
+            // Stop any running scripts first
+            for (const script of tab.runningScripts) {
+                await stopScript(script);
+            }
+
+            if (tab.project) {
+                updateHistoryOnClose(tab.project.projectPath);
+            }
+            tab.project = null;
+            tab.el.querySelector('.tab-title').textContent = 'New Project';
+            elements.projectName.textContent = 'Select a Project';
+            elements.projectPath.textContent = 'No project loaded';
+            tab.consoleEl.innerHTML = DROP_ZONE_HTML;
+            elements.scriptsBar.innerHTML = '<div class="no-scripts">Load a project to see available scripts</div>';
+            elements.depsList.innerHTML = '';
+            elements.devDepsList.innerHTML = '';
+            elements.depsStatus.className = 'deps-status';
+            elements.depsStatus.innerHTML = '<span class="status-dot"></span><span>Not loaded</span>';
+            elements.clearProjectBtn.classList.add('hidden');
+            elements.openFinderBtn.classList.add('hidden');
+            if (elements.killAllPortsBtn) elements.killAllPortsBtn.classList.add('hidden');
+            elements.selectFolderBtnText.textContent = 'Open Project';
+            tab.detectedUrl = null;
+            updateScriptButtons();
+            elements.urlBar.style.display = 'none';
+        }
     });
 
     // Clear console
@@ -342,10 +441,20 @@ function setupEventListeners() {
         }
     });
 
+    // History button logic
+    if (elements.historyBtn && elements.historyMenu) {
+        elements.historyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            elements.historyMenu.classList.toggle('hidden');
+            renderHistoryMenu();
+        });
+    }
+
     // Hide context menu on click elsewhere
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.context-menu')) {
-            elements.contextMenu.classList.add('hidden');
+            if (elements.contextMenu) elements.contextMenu.classList.add('hidden');
+            if (elements.historyMenu) elements.historyMenu.classList.add('hidden');
         }
     });
 }
@@ -421,6 +530,10 @@ async function loadProject(projectPath) {
     const tab = getTab();
     if (!tab) return;
 
+    if (tab.project && tab.project.projectPath !== projectPath) {
+        updateHistoryOnClose(tab.project.projectPath);
+    }
+
     // Clear console and reset state for new project
     tab.consoleEl.innerHTML = '';
     elements.urlBar.style.display = 'none';
@@ -432,9 +545,11 @@ async function loadProject(projectPath) {
         const result = await invoke('load_project', { path: projectPath });
 
         tab.project = result;
+        addToHistory(result);
 
         // Update header if active
         if (activeTabId === tab.id) {
+            if (window.resetClearButton) window.resetClearButton();
             elements.projectName.textContent = result.name;
             elements.projectPath.textContent = result.projectPath;
         }
@@ -786,6 +901,7 @@ function switchTab(id) {
     }
 
     activeTabId = id;
+    if (window.resetClearButton) window.resetClearButton();
     const current = tabs.get(id);
     if (!current) return;
 
@@ -846,6 +962,12 @@ function switchTab(id) {
 async function closeTab(id) {
     const tabToClose = tabs.get(id);
     if (!tabToClose) return;
+
+    if (tabToClose.project) {
+        const yes = await confirm(`Closing this tab will close the project "${tabToClose.project.name}". Are you sure?`, { title: 'Close Project', kind: 'warning' });
+        if (!yes) return;
+        updateHistoryOnClose(tabToClose.project.projectPath);
+    }
 
     // Stop running scripts
     for (const script of tabToClose.runningScripts) {

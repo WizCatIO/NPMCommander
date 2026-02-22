@@ -92,6 +92,8 @@ body {
     align-items: center;
     gap: 15px;
     pointer-events: none;
+    flex: 1;
+    min-width: 0;
     /* Let drag pass through */
 }
 
@@ -172,6 +174,38 @@ body {
 
 .btn-success:hover {
     filter: brightness(1.1);
+}
+
+.btn-confirming {
+    background: var(--bg-tertiary);
+    color: white;
+    border-color: var(--error);
+    position: relative;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.btn-confirming::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    background: var(--error);
+    z-index: -1;
+    animation: shrinkWidth 3s linear forwards;
+    transform-origin: left;
+}
+
+@keyframes shrinkWidth {
+    from {
+        transform: scaleX(1);
+    }
+
+    to {
+        transform: scaleX(0);
+    }
 }
 
 .btn-icon {
@@ -793,16 +827,18 @@ body {
     }
 }
 
-/* Context Menu */
 .context-menu {
     position: fixed;
     background: var(--bg-elevated);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow);
     padding: 6px;
-    z-index: 1000;
     min-width: 160px;
+    box-shadow: var(--shadow);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
 .menu-item {
