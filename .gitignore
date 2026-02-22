@@ -3891,3 +3891,9 @@ src-tauri/target/release/.fingerprint/adler2-78d7f91d1d6d0234/invoked.timestamp
 src-tauri/target/release/.fingerprint/adler2-78d7f91d1d6d0234/dep-lib-adler2
 src-tauri/target/release/.cargo-lock
 src-tauri/target/Icon
+src-tauri/target/release/Icon
+src-tauri/target/release/bundle/Icon
+src-tauri/target/Icon
+src-tauri/target/CACHEDIR.TAG
+src-tauri/target/.rustc_info.json
+src-tauri/Icon
