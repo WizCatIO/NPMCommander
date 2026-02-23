@@ -59,6 +59,13 @@ pub struct ScriptExit {
     tab_id: String,
 }
 
+#[derive(Serialize, Clone)]
+pub struct PortInfo {
+    port: u16,
+    pid: String,
+    process_name: String,
+}
+
 // Get settings path
 fn get_settings_path() -> PathBuf {
     let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -503,6 +510,108 @@ async fn kill_port_process() -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+async fn list_open_ports() -> Result<Vec<PortInfo>, String> {
+    let ports: Vec<u16> = vec![
+        3000, 3001, 3002, 3003, 3004, 3005, 3006, 3007, 3008, 3009, 3010,
+        5173, 8000, 8080, 5560, 8877,
+    ];
+
+    let mut results: Vec<PortInfo> = Vec::new();
+
+    for port in ports {
+        let port_arg = format!(":{}", port);
+        let output = Command::new("lsof")
+            .args(["-i", &port_arg, "-sTCP:LISTEN", "-n", "-P"])
+            .output();
+
+        if let Ok(output) = output {
+            let text = String::from_utf8_lossy(&output.stdout);
+            for line in text.lines().skip(1) {
+                // skip header
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.len() >= 2 {
+                    let process_name = parts[0].to_string();
+                    let pid = parts[1].to_string();
+                    // Avoid duplicate PIDs for the same port
+                    if !results.iter().any(|r| r.port == port && r.pid == pid) {
+                        results.push(PortInfo {
+                            port,
+                            pid,
+                            process_name,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(results)
+}
+
+#[tauri::command]
+async fn kill_single_port(port: u16) -> Result<String, String> {
+    let port_arg = format!(":{}", port);
+    let output = Command::new("lsof")
+        .args(["-i", &port_arg, "-t"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let pids = String::from_utf8_lossy(&output.stdout);
+    let mut killed_count = 0;
+
+    for pid in pids.lines() {
+        let pid = pid.trim();
+        if !pid.is_empty() {
+            let _ = Command::new("kill").arg("-9").arg(pid).output();
+            killed_count += 1;
+        }
+    }
+
+    if killed_count > 0 {
+        Ok(format!("Killed {} process(es) on port {}", killed_count, port))
+    } else {
+        Ok(format!("No process found on port {}", port))
+    }
+}
+
+#[tauri::command]
+async fn reload_browser_tab(port: u16) -> Result<(), String> {
+    let script = format!(
+        r#"
+        try
+            tell application "Google Chrome"
+                repeat with w in windows
+                    repeat with t in tabs of w
+                        if URL of t starts with "http://localhost:{port}" then
+                            reload t
+                        end if
+                    end repeat
+                end repeat
+            end tell
+        end try
+        try
+            tell application "Safari"
+                repeat with w in windows
+                    repeat with t in tabs of w
+                        if URL of t starts with "http://localhost:{port}" then
+                            tell t to do JavaScript "location.reload();"
+                        end if
+                    end repeat
+                end repeat
+            end tell
+        end try
+        "#
+    );
+
+    Command::new("osascript")
+        .args(["-e", &script])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -519,6 +628,9 @@ pub fn run() {
             install_deps,
             kill_all_ports,
             kill_port_process,
+            list_open_ports,
+            kill_single_port,
+            reload_browser_tab,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -139,6 +139,10 @@ const elements = {
     historyMenu: document.getElementById('historyMenu'),
     historyList: document.getElementById('historyList'),
     consoleContainer: document.getElementById('console').parentElement, // use parent as container
+    portsView: document.getElementById('portsView'),
+    portsList: document.getElementById('portsList'),
+    viewPortsBtn: document.getElementById('viewPortsBtn'),
+    consoleHeader: document.querySelector('.console-header'),
 
     // Custom Modal Elements
     customModal: document.getElementById('customModal'),
@@ -315,7 +319,7 @@ function setupEventListeners() {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 6L6 18M6 6l12 12"></path>
                 </svg>
-                Clear Project
+                Exit Project
             `;
         }
     };
@@ -516,6 +520,211 @@ function setupEventListeners() {
             }
         }
     });
+
+    // View Ports button
+    if (elements.viewPortsBtn) {
+        let portsViewActive = false;
+        let savedConsoleHeaderHTML = null;
+
+        elements.viewPortsBtn.addEventListener('click', async () => {
+            if (portsViewActive) {
+                exitPortsView();
+            } else {
+                await enterPortsView();
+            }
+        });
+
+        async function enterPortsView() {
+            portsViewActive = true;
+            elements.viewPortsBtn.classList.add('btn-ports-active');
+            elements.viewPortsBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 12H5M12 19l-7-7 7-7"></path>
+                </svg>
+                Back to Console
+            `;
+
+            // Hide all tab consoles
+            for (const [, tab] of tabs) {
+                tab.consoleEl.classList.add('hidden');
+            }
+
+            // Swap console header
+            savedConsoleHeaderHTML = elements.consoleHeader.innerHTML;
+            elements.consoleHeader.innerHTML = `
+                <h2>Currently Open Ports</h2>
+                <div class="console-actions">
+                    <button class="btn btn-secondary btn-sm" id="portsRefreshListBtn" title="Refresh Port List">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                    </button>
+                    <button class="btn btn-danger btn-sm" id="portsKillAllBtn">Kill All</button>
+                    <button class="btn btn-secondary btn-sm" id="portsCloseBtn">Close</button>
+                </div>
+            `;
+
+            document.getElementById('portsRefreshListBtn').addEventListener('click', async () => {
+                await refreshPortsList();
+            });
+
+            document.getElementById('portsKillAllBtn').addEventListener('click', async () => {
+                const confirmed = await showCustomConfirm('Kill all processes on monitored ports?', 'Kill All Ports');
+                if (!confirmed) return;
+                try {
+                    await invoke('kill_all_ports');
+                } catch (e) {
+                    console.error('Failed to kill all ports:', e);
+                }
+                await refreshPortsList();
+            });
+
+            document.getElementById('portsCloseBtn').addEventListener('click', () => {
+                exitPortsView();
+            });
+
+            // Show ports view
+            elements.portsView.classList.remove('hidden');
+            elements.urlBar.style.display = 'none';
+
+            await refreshPortsList();
+        }
+
+        function exitPortsView() {
+            portsViewActive = false;
+            elements.viewPortsBtn.classList.remove('btn-ports-active');
+            elements.viewPortsBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                </svg>
+                View All Ports
+            `;
+
+            // Hide ports view
+            elements.portsView.classList.add('hidden');
+
+            // Restore console header
+            if (savedConsoleHeaderHTML) {
+                elements.consoleHeader.innerHTML = savedConsoleHeaderHTML;
+                // Re-bind console header buttons
+                rebindConsoleHeaderButtons();
+                savedConsoleHeaderHTML = null;
+            }
+
+            // Show active tab console again
+            const current = tabs.get(activeTabId);
+            if (current) {
+                current.consoleEl.classList.remove('hidden');
+                if (current.detectedUrl) {
+                    elements.urlText.textContent = current.detectedUrl;
+                    elements.urlBar.style.display = 'flex';
+                }
+            }
+        }
+
+        function rebindConsoleHeaderButtons() {
+            const clearBtn = document.getElementById('clearConsoleBtn');
+            if (clearBtn) {
+                clearBtn.addEventListener('click', () => {
+                    const tab = getTab();
+                    if (tab) {
+                        tab.consoleEl.innerHTML = '';
+                        elements.urlBar.style.display = 'none';
+                        tab.detectedUrl = null;
+                    }
+                });
+            }
+            const copyAllBtn = document.getElementById('copyAllBtn');
+            if (copyAllBtn) {
+                copyAllBtn.addEventListener('click', () => {
+                    const cons = getConsole();
+                    if (cons) {
+                        navigator.clipboard.writeText(cons.innerText).catch(() => { });
+                    }
+                });
+            }
+            const copyErrorsBtn = document.getElementById('copyErrorsBtn');
+            if (copyErrorsBtn) {
+                copyErrorsBtn.addEventListener('click', () => {
+                    const cons = getConsole();
+                    if (!cons) return;
+                    const spans = cons.querySelectorAll('.error, .warning');
+                    const text = Array.from(spans).map(s => s.innerText).join('\n');
+                    if (text) navigator.clipboard.writeText(text).catch(() => { });
+                });
+            }
+        }
+
+        async function refreshPortsList() {
+            elements.portsList.innerHTML = '<div class="ports-loading">Scanning ports...</div>';
+            try {
+                const ports = await invoke('list_open_ports');
+                if (ports.length === 0) {
+                    elements.portsList.innerHTML = '<div class="ports-empty">No open ports detected on monitored range</div>';
+                    return;
+                }
+                elements.portsList.innerHTML = '';
+                ports.forEach(p => {
+                    const item = document.createElement('div');
+                    item.className = 'port-item';
+                    item.innerHTML = `
+                        <div class="port-info">
+                            <span class="port-number">:${p.port}</span>
+                            <div class="port-details">
+                                <span class="port-process">${p.process_name}</span>
+                                <span class="port-pid">PID ${p.pid}</span>
+                            </div>
+                        </div>
+                        <div class="port-actions">
+                            <button class="port-view-btn" data-port="${p.port}">View</button>
+                            <button class="port-refresh-btn" data-port="${p.port}">Refresh</button>
+                            <button class="port-kill-btn" data-port="${p.port}">Kill</button>
+                        </div>
+                    `;
+                    item.querySelector('.port-view-btn').addEventListener('click', async (e) => {
+                        const port = e.target.dataset.port;
+                        try {
+                            await openUrl(`http://localhost:${port}`);
+                        } catch (err) {
+                            console.error('Failed to open port URL:', err);
+                        }
+                    });
+                    item.querySelector('.port-refresh-btn').addEventListener('click', async (e) => {
+                        const port = Number(e.target.dataset.port);
+                        e.target.textContent = 'Reloading...';
+                        e.target.disabled = true;
+                        try {
+                            await invoke('reload_browser_tab', { port });
+                        } catch (err) {
+                            console.error('Failed to reload browser tab:', err);
+                        }
+                        // Reset button text after a bit
+                        setTimeout(() => {
+                            e.target.textContent = 'Refresh';
+                            e.target.disabled = false;
+                        }, 500);
+                    });
+                    item.querySelector('.port-kill-btn').addEventListener('click', async (e) => {
+                        const port = Number(e.target.dataset.port);
+                        e.target.textContent = 'Killing...';
+                        e.target.disabled = true;
+                        try {
+                            await invoke('kill_single_port', { port });
+                        } catch (err) {
+                            console.error('Failed to kill port:', err);
+                        }
+                        await refreshPortsList();
+                    });
+                    elements.portsList.appendChild(item);
+                });
+            } catch (e) {
+                elements.portsList.innerHTML = `<div class="ports-empty">Error scanning ports: ${e}</div>`;
+            }
+        }
+
+        // Make refreshPortsList accessible
+        window.refreshPortsList = refreshPortsList;
+    }
 }
 
 // Setup Context Menu Actions

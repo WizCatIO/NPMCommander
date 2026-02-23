@@ -3900,3 +3900,4 @@ src-tauri/Icon
 /src-tauri/target/release
 /dist
 src-tauri/Icon
+/src-tauri/target/debug
