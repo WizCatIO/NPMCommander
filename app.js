@@ -4,7 +4,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { open, confirm } from '@tauri-apps/plugin-dialog';
+import { open } from '@tauri-apps/plugin-dialog';
 import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 
 const appWindow = getCurrentWindow();
@@ -50,8 +50,21 @@ function renderHistoryMenu() {
         item.className = 'menu-item';
         let subText = proj.closedAt ? `Last closed: ${new Date(proj.closedAt).toLocaleString()}` : 'Currently Open';
         item.innerHTML = `<strong>${proj.name}</strong><br><span style="font-size:10px; opacity:0.7;">${subText}</span>`;
-        item.onclick = () => {
+        item.onclick = async () => {
             elements.historyMenu.classList.add('hidden');
+
+            // Check if project is already open in any tab
+            for (const [id, tab] of tabs) {
+                if (tab.project && tab.project.projectPath === proj.path) {
+                    switchTab(id);
+                    return;
+                }
+            }
+
+            const currentTab = getTab();
+            if (currentTab && currentTab.project) {
+                await createNewTab();
+            }
             loadProject(proj.path);
         };
         elements.historyList.appendChild(item);
@@ -125,8 +138,43 @@ const elements = {
     historyBtn: document.getElementById('historyBtn'),
     historyMenu: document.getElementById('historyMenu'),
     historyList: document.getElementById('historyList'),
-    consoleContainer: document.getElementById('console').parentElement // use parent as container
+    consoleContainer: document.getElementById('console').parentElement, // use parent as container
+
+    // Custom Modal Elements
+    customModal: document.getElementById('customModal'),
+    customModalTitle: document.getElementById('customModalTitle'),
+    customModalMessage: document.getElementById('customModalMessage'),
+    customModalCancel: document.getElementById('customModalCancel'),
+    customModalConfirm: document.getElementById('customModalConfirm')
 };
+
+// Custom Confirm Helper
+function showCustomConfirm(message, title = 'Confirm') {
+    return new Promise((resolve) => {
+        elements.customModalTitle.textContent = title;
+        elements.customModalMessage.textContent = message;
+        elements.customModal.classList.remove('hidden');
+
+        const cleanup = () => {
+            elements.customModal.classList.add('hidden');
+            elements.customModalCancel.removeEventListener('click', onCancel);
+            elements.customModalConfirm.removeEventListener('click', onConfirm);
+        };
+
+        const onCancel = () => {
+            cleanup();
+            resolve(false);
+        };
+
+        const onConfirm = () => {
+            cleanup();
+            resolve(true);
+        };
+
+        elements.customModalCancel.addEventListener('click', onCancel);
+        elements.customModalConfirm.addEventListener('click', onConfirm);
+    });
+}
 
 // Initialize
 async function init() {
@@ -337,7 +385,8 @@ function setupEventListeners() {
     // Kill All Ports
     if (elements.killAllPortsBtn) {
         elements.killAllPortsBtn.addEventListener('click', async () => {
-            if (!confirm('Are you sure you want to kill all processes on ports 3000-3010, 5173, 8000, 8080, 5560, and 8877? This may stop other running applications.')) {
+            const confirmed = await showCustomConfirm('Are you sure you want to kill all processes on ports 3000-3010, 5173, 8000, 8080, 5560, and 8877? This may stop other running applications.', 'Kill All Ports');
+            if (!confirmed) {
                 return;
             }
 
@@ -455,6 +504,16 @@ function setupEventListeners() {
         if (!e.target.closest('.context-menu')) {
             if (elements.contextMenu) elements.contextMenu.classList.add('hidden');
             if (elements.historyMenu) elements.historyMenu.classList.add('hidden');
+        }
+    });
+
+    // CMD+W to close tab
+    window.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'w') {
+            e.preventDefault();
+            if (activeTabId) {
+                closeTab(activeTabId);
+            }
         }
     });
 }
@@ -964,7 +1023,7 @@ async function closeTab(id) {
     if (!tabToClose) return;
 
     if (tabToClose.project) {
-        const yes = await confirm(`Closing this tab will close the project "${tabToClose.project.name}". Are you sure?`, { title: 'Close Project', kind: 'warning' });
+        const yes = await showCustomConfirm(`Closing this tab will close the project "${tabToClose.project.name}". Are you sure?`, 'Close Project');
         if (!yes) return;
         updateHistoryOnClose(tabToClose.project.projectPath);
     }
